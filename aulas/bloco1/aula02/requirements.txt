@@ -1,0 +1,4 @@
+# Dependencias da Aula 02 - Modelos de Processamento (SIMD, MIMD, RISC, CISC).
+# Instaladas automaticamente pelo iniciar.bat (dentro de .venv).
+# NumPy e obrigatorio; CuPy/PyTorch sao opcionais (usados so se houver GPU).
+numpy>=1.24.0

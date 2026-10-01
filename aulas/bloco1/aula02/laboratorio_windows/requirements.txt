@@ -1,0 +1,4 @@
+# Dependencias do laboratorio Windows - Aula 02.
+# Instaladas automaticamente pelo iniciar.bat (dentro de .venv).
+# numpy e obrigatorio; cupy/torch sao opcionais (usados so se houver GPU).
+numpy>=1.24.0

@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aula 16 — Agentes de Código, GitHub, Contexto e AGENTS.md (Antigravity CLI)</title>
+<style>
+  :root {
+    --bg: #0b1020;
+    --panel: #161f3d;
+    --panel-2: #1c2749;
+    --border: #2b3868;
+    --text: #e8ecff;
+    --muted: #9aa7d4;
+    --accent: #6366f1;
+    --accent-2: #10b981;
+    --accent-3: #f97316;
+    --accent-4: #ef4444;
+    --accent-5: #7e22ce;
+    --code-bg: #0a0f22;
+    --radius: 14px;
+    --shadow: 0 18px 50px rgba(0,0,0,.45);
+    font-size: 15px;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: var(--bg); color: var(--text);
+    font-family: "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+    overflow: hidden;
+  }
+
+  #progress {
+    position: fixed; top: 0; left: 0; height: 4px; width: 0%;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2), var(--accent-3));
+    z-index: 50; transition: width .18s ease;
+  }
+
+  #topbar {
+    position: fixed; top: 4px; left: 0; right: 0; height: 40px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 22px; font-size: .74rem; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--muted); z-index: 40; pointer-events: none;
+  }
+  #topbar .brand { display: flex; align-items: center; gap: 10px; }
+  #topbar .dot {
+    width: 9px; height: 9px; border-radius: 50%; background: var(--accent-2);
+    box-shadow: 0 0 12px var(--accent-2);
+  }
+
+  #deck { position: relative; height: 100%; width: 100%; }
+
+  .slide {
+    position: absolute; inset: 0; display: none; flex-direction: column;
+    justify-content: center; padding: 66px 7vw 76px; opacity: 0;
+    transform: translateY(14px); transition: opacity .3s ease, transform .3s ease;
+    overflow-y: auto;
+  }
+  .slide.active { display: flex; opacity: 1; transform: translateY(0); }
+  .slide::-webkit-scrollbar { width: 10px; }
+  .slide::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
+
+  .kicker {
+    display: inline-block; align-self: flex-start; font-size: .7rem;
+    letter-spacing: .16em; text-transform: uppercase; color: var(--accent-2);
+    border: 1px solid var(--border); background: rgba(16,185,129,.08);
+    padding: 5px 12px; border-radius: 999px; margin-bottom: 14px;
+  }
+
+  h1 { font-size: clamp(1.9rem, 4vw, 3rem); line-height: 1.08; margin: 0 0 16px; font-weight: 700; letter-spacing: -.02em; }
+  h2 { font-size: clamp(1.45rem, 2.6vw, 2.1rem); margin: 0 0 16px; line-height: 1.15; letter-spacing: -.01em; }
+  h2 .num { color: var(--accent); font-variant-numeric: tabular-nums; margin-right: .4em; }
+  h3 { font-size: 1.05rem; margin: 0 0 8px; color: var(--text); }
+  p { font-size: 1rem; line-height: 1.6; color: var(--muted); margin: 0 0 12px; max-width: 66ch; }
+  p strong, li strong { color: var(--text); }
+  .lead { font-size: 1.2rem; color: var(--text); max-width: 70ch; }
+
+  ul.clean { list-style: none; padding: 0; margin: 0; }
+  ul.clean > li {
+    position: relative; padding: 7px 0 7px 28px; font-size: 1rem;
+    line-height: 1.5; color: var(--muted); max-width: 72ch;
+  }
+  ul.clean > li::before {
+    content: ""; position: absolute; left: 4px; top: 15px;
+    width: 9px; height: 9px; border-radius: 3px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  }
+  ul.check > li::before { content: "✓"; background: none; color: var(--accent-2); font-weight: 700; left: 0; top: 6px; width: auto; height: auto; }
+
+  .grid { display: grid; gap: 16px; }
+  .grid.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grid.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .grid.cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+  .card {
+    background: linear-gradient(180deg, var(--panel), var(--panel-2));
+    border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 17px 19px; box-shadow: var(--shadow);
+  }
+  .card h3 { display: flex; align-items: center; gap: 10px; }
+  .card .ico { font-size: 1.3rem; }
+  .card p { font-size: .94rem; margin: 0; }
+
+  .stat { display: flex; flex-direction: column; gap: 4px; }
+  .stat .big { font-size: 1.75rem; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; line-height: 1; }
+  .stat .cap { font-size: .78rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+
+  code {
+    font-family: "Cascadia Code", "Fira Code", Consolas, "Courier New", monospace;
+    font-size: .9em; background: rgba(99,102,241,.16);
+    border: 1px solid rgba(99,102,241,.32); color: #c7d0ff;
+    padding: 1px 6px; border-radius: 6px;
+  }
+
+  pre {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-left: 3px solid var(--accent); border-radius: 10px;
+    padding: 14px 16px; overflow-x: auto; margin: 0;
+    box-shadow: inset 0 0 40px rgba(0,0,0,.35);
+  }
+  pre code {
+    background: none; border: none; padding: 0; color: #dbe1ff;
+    font-size: .8rem; line-height: 1.55; white-space: pre; display: block;
+  }
+  pre.scroll { max-height: 340px; overflow-y: auto; }
+
+  .pipeline { display: flex; align-items: stretch; gap: 9px; flex-wrap: wrap; }
+  .pipe-step {
+    flex: 1 1 130px; background: linear-gradient(180deg, var(--panel), var(--panel-2));
+    border: 1px solid var(--border); border-radius: 12px; padding: 13px 11px; text-align: center;
+  }
+  .pipe-step .step-ico { font-size: 1.4rem; display: block; margin-bottom: 6px; }
+  .pipe-step .step-title { font-weight: 600; color: var(--text); font-size: .9rem; display: block; margin-bottom: 3px; }
+  .pipe-step .step-sub { font-size: .74rem; color: var(--muted); }
+  .pipe-arrow { align-self: center; color: var(--accent); font-size: 1.4rem; flex: 0 0 auto; }
+
+  table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  th { color: var(--text); font-size: .76rem; text-transform: uppercase; letter-spacing: .09em; }
+  td { color: var(--muted); }
+  tr:last-child td { border-bottom: none; }
+
+  .debate {
+    display: flex; gap: 12px; align-items: flex-start; padding: 11px 14px;
+    border: 1px solid var(--border); border-radius: 12px; background: var(--panel); margin-bottom: 9px;
+  }
+  .debate .q {
+    flex: 0 0 30px; height: 30px; border-radius: 50%; display: grid; place-items: center;
+    background: var(--accent); color: #fff; font-weight: 700; font-size: .9rem;
+  }
+  .debate p { margin: 0; font-size: .95rem; }
+
+  .timeline { display: flex; flex-direction: column; gap: 8px; }
+  .tl-item {
+    display: flex; gap: 14px; align-items: center;
+    border: 1px solid var(--border); border-radius: 11px;
+    background: var(--panel); padding: 10px 14px;
+  }
+  .tl-item .tl-time {
+    flex: 0 0 auto; font-variant-numeric: tabular-nums; color: var(--accent-2);
+    font-weight: 700; font-size: .82rem; min-width: 58px;
+  }
+  .tl-item .tl-txt { font-size: .92rem; color: var(--muted); }
+
+  .terminal {
+    background: #05070f; border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px; font-family: "Cascadia Code", Consolas, monospace;
+    font-size: .78rem; line-height: 1.6; color: #9fe8c4; overflow-x: auto;
+  }
+  .terminal .dim { color: #5c6a97; }
+
+  #bottombar {
+    position: fixed; bottom: 0; left: 0; right: 0; height: 52px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 22px; z-index: 40;
+    background: linear-gradient(180deg, rgba(11,16,32,0), rgba(11,16,32,.92));
+  }
+  #counter { font-size: .82rem; color: var(--muted); font-variant-numeric: tabular-nums; letter-spacing: .06em; }
+  .nav-buttons { display: flex; gap: 8px; }
+  .nav-buttons button {
+    background: var(--panel); border: 1px solid var(--border); color: var(--text);
+    border-radius: 9px; padding: 7px 13px; font-size: .88rem; cursor: pointer;
+    transition: background .15s, border-color .15s, transform .1s;
+  }
+  .nav-buttons button:hover { background: var(--panel-2); border-color: var(--accent); }
+  .nav-buttons button:active { transform: scale(.96); }
+  .hint { font-size: .74rem; color: var(--muted); opacity: .8; }
+
+  .title-slide { align-items: flex-start; }
+  .title-slide h1 {
+    background: linear-gradient(120deg, #fff 20%, #a5b4fc 60%, #6ee7b7 100%);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .meta-row { display: flex; gap: 26px; flex-wrap: wrap; margin-top: 22px; }
+  .meta-row .meta .k { font-size: .7rem; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
+  .meta-row .meta .v { font-size: 1rem; color: var(--text); }
+
+  .note {
+    display: flex; align-items: center; gap: 10px; font-size: .86rem; color: var(--muted);
+    border: 1px dashed var(--border); border-radius: 10px; padding: 9px 14px;
+    margin-bottom: 14px; align-self: flex-start;
+  }
+  .note .ico { font-size: 1.05rem; }
+
+  @media (max-width: 900px) {
+    .grid.cols-3, .grid.cols-4 { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    .slide { padding: 60px 6vw 72px; }
+  }
+  @media (max-width: 620px) {
+    .grid.cols-2, .grid.cols-3, .grid.cols-4 { grid-template-columns: 1fr; }
+    #topbar { font-size: .62rem; }
+  }
+</style>
+</head>
+<body>
+
+<div id="progress"></div>
+
+<div id="topbar">
+  <div class="brand"><span class="dot"></span><span>Introdução a Arquitetura de Computadores</span></div>
+  <div>Bloco 3 · Automação</div>
+</div>
+
+<main id="deck">
+
+  <!-- 01 — Título -->
+  <section class="slide title-slide active">
+    <div class="kicker">Aula 16 · Prática</div>
+    <h1>Agentes de Código: GitHub, Contexto, AGENTS.md e Harness</h1>
+    <p class="lead">Como usar o <strong>GitHub</strong> como rede de segurança, entender o <strong>Contexto</strong> do modelo e utilizar o <strong>AGENTS.md</strong> para orientar ferramentas agent-first (Antigravity CLI <code>agy</code>).</p>
+    <div class="meta-row">
+      <div class="meta"><div class="k">Bloco</div><div class="v">3 — Automação</div></div>
+      <div class="meta"><div class="k">Ferramenta</div><div class="v">Google Antigravity CLI (<code>agy</code>) & GitHub</div></div>
+    </div>
+    <div class="grid cols-2" style="margin-top:26px">
+      <div class="card" style="border-top:3px solid var(--accent-2)">
+        <h3><span class="ico">🎯</span> Situação de aprendizagem</h3>
+        <p>A startup precisa acelerar o desenvolvimento de um <strong>programa de monitoramento web em Python</strong>. Você usará o <code>agy</code> com diretrizes via <code>AGENTS.md</code> e salvando tudo no <strong>GitHub</strong>.</p>
+      </div>
+      <div class="card" style="border-top:3px solid var(--accent)">
+        <h3><span class="ico">🧭</span> O que vamos entender</h3>
+        <p><strong>GitHub para Iniciantes</strong>, <strong>Contexto & Context Window</strong>, <strong>AGENTS.md</strong>, <strong>Harness</strong> e <strong>Vibe Coding responsável</strong>.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 02 — Roteiro -->
+  <section class="slide">
+    <div class="kicker">Visão Geral</div>
+    <h2>Objetivo da aula</h2>
+    <p><strong>Objetivo:</strong> dominar o ciclo de versionamento com **GitHub**, compreender o papel do **Contexto** e do **AGENTS.md** na automação agêntica e construir uma aplicação web de monitoramento.</p>
+    <div class="grid" style="align-items:start">
+      <div>
+        <div class="card" style="margin-bottom:12px">
+          <h3><span class="ico">🔑</span> Conceitos-chave</h3>
+          <p>GitHub · <code>git add/commit/push</code> · Context Window · Token Limit · AGENTS.md · Harness · Loop Agêntico · Diffs</p>
+        </div>
+        <div class="card">
+          <h3><span class="ico">📄</span> Material da aula</h3>
+          <p>Apresentação + <code>atividade.md</code> (tutorial GitHub + guia Contexto) + <code>laboratorio_monitoramento/AGENTS.md</code>.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 03 — GitHub como Rede de Segurança -->
+  <section class="slide">
+    <div class="kicker">Versionamento</div>
+    <h2><span class="num">1.</span>GitHub: A Rede de Segurança da IA</h2>
+    <p>Ao usar agentes de IA que editam arquivos automaticamente, o <strong>GitHub/Git</strong> é a sua proteção contra erros e perda de código.</p>
+    <div class="grid cols-3">
+      <div class="card">
+        <h3><span class="ico">📜</span> Histórico Infalível</h3>
+        <p>Cada alteração aceita vira um <code>commit</code>. Se a IA gerar um bug, basta dar <code>git reset</code> ou restaurar o estado anterior.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ico">🔍</span> Transparência em Diffs</h3>
+        <p>Com <code>git diff</code> ou o comando <code>/diff</code> no agente, você revisa linha por linha antes de aprovar.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ico">☁️</span> Nuvem e Colaboração</h3>
+        <p>Com <code>git push</code>, seu projeto fica seguro no GitHub, acessível e pronto para trabalho em equipe via Pull Requests.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 04 — O que é Contexto -->
+  <section class="slide">
+    <div class="kicker">Teoria · Contexto</div>
+    <h2><span class="num">2.</span>O que é Contexto e Janela de Contexto?</h2>
+    <p>O <strong>contexto</strong> é a quantidade total de dados que a IA consegue processar simultaneamente em sua "memória de trabalho".</p>
+    <div class="grid cols-2">
+      <div>
+        <h3 style="margin-bottom:10px">Componentes do Contexto</h3>
+        <ul class="clean">
+          <li><strong>Instrução do Usuário:</strong> O prompt enviado no terminal</li>
+          <li><strong>Diretrizes do Projeto:</strong> O arquivo <code>AGENTS.md</code></li>
+          <li><strong>Arquivos Lidos:</strong> Código lido via ferramentas (tools)</li>
+          <li><strong>Histórico da Conversa:</strong> Diffs e respostas anteriores</li>
+        </ul>
+      </div>
+      <div>
+        <div class="card" style="border-top:3px solid var(--accent-4)">
+          <h3><span class="ico">⚠️</span> Degradação de Contexto (Context Rot)</h3>
+          <p>Contexto demais polui a memória da IA. Informações irrelevantes fazem o agente esquecer regras ou hallucinar. Mantenha o contexto limpo!</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 05 — O que é AGENTS.md -->
+  <section class="slide">
+    <div class="kicker">Teoria · Diretrizes</div>
+    <h2><span class="num">3.</span>AGENTS.md: A Memória Persistente do Projeto</h2>
+    <p>O <code>AGENTS.md</code> é um arquivo markdown na raiz do repositório lido **automaticamente** por agentes de IA (`agy`, Claude Code, Cursor).</p>
+    <div class="grid cols-2">
+      <div>
+        <h3 style="margin-bottom:10px">O que colocar no AGENTS.md</h3>
+        <ul class="clean">
+          <li><strong>Objetivo & Arquitetura:</strong> O que o projeto faz e sua estrutura</li>
+          <li><strong>Convenções de Código:</strong> Idioma, tratamento de erros, estilos</li>
+          <li><strong>Comandos de Execução:</strong> Como rodar o servidor e testes</li>
+        </ul>
+      </div>
+      <div>
+        <div class="note">
+          <span class="ico">💡</span>
+          <span>Em vez de repetir instruções a cada prompt, você escreve o <code>AGENTS.md</code> uma vez. Toda IA que abrir o repositório seguirá as mesmas regras.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 06 — Harness -->
+  <section class="slide">
+    <div class="kicker">Teoria · Harness</div>
+    <h2><span class="num">4.</span>O Harness e o Loop Agêntico</h2>
+    <p>O <strong>Harness</strong> conecta o modelo de IA ao seu computador: gerencia o loop, executa comandos e lê arquivos.</p>
+    <div class="pipeline" style="margin:14px 0">
+      <div class="pipe-step"><span class="step-ico">👁️</span><span class="step-title">Observar</span><span class="step-sub">Lê AGENTS.md e projeto</span></div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-step"><span class="step-ico">🗺️</span><span class="step-title">Planejar</span><span class="step-sub">Lista arquivos a criar</span></div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-step"><span class="step-ico">⚙️</span><span class="step-title">Agir</span><span class="step-sub">Cria app.py, HTML/CSS</span></div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-step"><span class="step-ico">✅</span><span class="step-title">Verificar</span><span class="step-sub">Testa a aplicação web</span></div>
+    </div>
+  </section>
+
+  <!-- 07 — Prática Monitoramento Web -->
+  <section class="slide">
+    <div class="kicker">Prática · Laboratório</div>
+    <h2><span class="num">5.</span>Prática: Monitoramento Web em Python</h2>
+    <p>Criaremos uma aplicação web de monitoramento de sistema (CPU, RAM, Disco) com Flask + psutil guiados pelo <code>AGENTS.md</code>.</p>
+    <div class="grid cols-2">
+      <div>
+        <h3 style="margin-bottom:10px">Comando no <code>agy</code></h3>
+        <div class="terminal">
+<span class="dim"># Dentro de laboratorio_monitoramento/</span>
+agy
+
+<span class="dim"># Prompt no agente:</span>
+"Leia o arquivo AGENTS.md desta pasta e crie a aplicação de monitoramento web em Python."
+        </div>
+      </div>
+      <div>
+        <h3 style="margin-bottom:10px">Componentes a Gerar</h3>
+        <ul class="clean">
+          <li><code>app.py</code> — Servidor Flask e API JSON</li>
+          <li><code>coletor.py</code> — Leitura de hardware com <code>psutil</code></li>
+          <li><code>templates/index.html</code> — Dashboard Dark Mode</li>
+          <li><code>iniciar.bat</code> — Script de execução no Windows</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 08 — Debate -->
+  <section class="slide">
+    <div class="kicker">Discussão em Grupo</div>
+    <h2><span class="num">6.</span>Debate — grupos de 3 a 4</h2>
+    <div class="debate"><div class="q">1</div><p>De que forma o <strong>GitHub</strong> atua como salvaguarda quando uma IA faz um *commit* ou gera código com bugs?</p></div>
+    <div class="debate"><div class="q">2</div><p>Por que a **Janela de Contexto** limpa e um `AGENTS.md` bem estruturado evitam que o agente hallucine?</p></div>
+    <div class="debate"><div class="q">3</div><p>Qual a diferença entre *Vibe Coding* irresponsável e o desenvolvimento orientado a agentes com verificação de diffs?</p></div>
+  </section>
+
+  <!-- 09 — Síntese -->
+  <section class="slide">
+    <div class="kicker">Síntese</div>
+    <h2>O que levar desta aula</h2>
+    <div class="grid cols-2">
+      <div>
+        <ul class="clean check">
+          <li><strong>GitHub:</strong> Sempre salvar o progresso com <code>git add</code>, <code>commit</code> e <code>push</code>.</li>
+          <li><strong>Contexto:</strong> Informação enxuta gera respostas melhores da IA.</li>
+          <li><strong>AGENTS.md:</strong> Defina regras estáticas do projeto para qualquer agente seguir.</li>
+          <li><strong>Verificação:</strong> Use <code>/diff</code> antes de aprovar código gerado por IA.</li>
+        </ul>
+      </div>
+      <div>
+        <div class="card">
+          <h3><span class="ico">📌</span> Próximos Passos</h3>
+          <p>Complete a prática no arquivo <code>atividade.md</code> e envie seu repositório de monitoramento para o GitHub!</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<div id="bottombar">
+  <div id="counter">01 / 09</div>
+  <div class="hint">← → · espaço · Home/End</div>
+  <div class="nav-buttons">
+    <button id="prev" aria-label="Slide anterior">← Anterior</button>
+    <button id="next" aria-label="Próximo slide">Próximo →</button>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var slides = Array.prototype.slice.call(document.querySelectorAll(".slide"));
+    var progress = document.getElementById("progress");
+    var counter = document.getElementById("counter");
+    var current = 0;
+
+    function pad(n) { return n < 10 ? "0" + n : "" + n; }
+
+    function render() {
+      slides.forEach(function (s, i) { s.classList.toggle("active", i === current); });
+      var pct = slides.length > 1 ? (current / (slides.length - 1)) * 100 : 100;
+      progress.style.width = pct + "%";
+      counter.textContent = pad(current + 1) + " / " + pad(slides.length);
+      if (window.location.hash !== "#" + (current + 1)) {
+        history.replaceState(null, "", "#" + (current + 1));
+      }
+    }
+
+    function go(delta) {
+      var next = current + delta;
+      if (next < 0 || next >= slides.length) return;
+      current = next;
+      render();
+    }
+
+    function goTo(index) {
+      if (index < 0 || index >= slides.length) return;
+      current = index;
+      render();
+    }
+
+    document.getElementById("next").addEventListener("click", function () { go(1); });
+    document.getElementById("prev").addEventListener("click", function () { go(-1); });
+
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "ArrowRight" || e.key === " " || e.key === "PageDown") {
+        e.preventDefault(); go(1);
+      } else if (e.key === "ArrowLeft" || e.key === "PageUp") {
+        e.preventDefault(); go(-1);
+      } else if (e.key === "Home") {
+        e.preventDefault(); goTo(0);
+      } else if (e.key === "End") {
+        e.preventDefault(); goTo(slides.length - 1);
+      }
+    });
+
+    window.addEventListener("hashchange", function () {
+      var n = parseInt(window.location.hash.replace("#", ""), 10);
+      if (!isNaN(n)) goTo(n - 1);
+    });
+
+    var start = parseInt(window.location.hash.replace("#", ""), 10);
+    if (!isNaN(start)) current = Math.min(Math.max(start - 1, 0), slides.length - 1);
+    render();
+  })();
+</script>
+</body>
+</html>

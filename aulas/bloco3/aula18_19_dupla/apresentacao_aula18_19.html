@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aula 18+19 — Concorrência e Energia na GPU</title>
+<style>
+  :root {
+    --bg: #0b1020;
+    --panel: #161f3d;
+    --panel-2: #1c2749;
+    --border: #2b3868;
+    --text: #e8ecff;
+    --muted: #9aa7d4;
+    --accent: #6366f1;
+    --accent-2: #10b981;
+    --accent-3: #f97316;
+    --accent-4: #ef4444;
+    --accent-5: #7e22ce;
+    --code-bg: #0a0f22;
+    --radius: 14px;
+    --shadow: 0 18px 50px rgba(0,0,0,.45);
+    font-size: 15px;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: var(--bg); color: var(--text);
+    font-family: "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+    overflow: hidden;
+  }
+
+  #progress {
+    position: fixed; top: 0; left: 0; height: 4px; width: 0%;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2), var(--accent-3));
+    z-index: 50; transition: width .18s ease;
+  }
+
+  #topbar {
+    position: fixed; top: 4px; left: 0; right: 0; height: 40px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 22px; font-size: .74rem; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--muted); z-index: 40; pointer-events: none;
+  }
+  #topbar .brand { display: flex; align-items: center; gap: 10px; }
+  #topbar .dot {
+    width: 9px; height: 9px; border-radius: 50%; background: var(--accent-2);
+    box-shadow: 0 0 12px var(--accent-2);
+  }
+
+  #deck { position: relative; height: 100%; width: 100%; }
+
+  .slide {
+    position: absolute; inset: 0; display: none; flex-direction: column;
+    justify-content: center; padding: 66px 7vw 76px; opacity: 0;
+    transform: translateY(14px); transition: opacity .3s ease, transform .3s ease;
+    overflow-y: auto;
+  }
+  .slide.active { display: flex; opacity: 1; transform: translateY(0); }
+  .slide::-webkit-scrollbar { width: 10px; }
+  .slide::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
+
+  .kicker {
+    display: inline-block; align-self: flex-start; font-size: .7rem;
+    letter-spacing: .16em; text-transform: uppercase; color: var(--accent-2);
+    border: 1px solid var(--border); background: rgba(16,185,129,.08);
+    padding: 5px 12px; border-radius: 999px; margin-bottom: 14px;
+  }
+
+  h1 { font-size: clamp(1.9rem, 4vw, 3rem); line-height: 1.08; margin: 0 0 16px; font-weight: 700; letter-spacing: -.02em; }
+  h2 { font-size: clamp(1.45rem, 2.6vw, 2.1rem); margin: 0 0 16px; line-height: 1.15; letter-spacing: -.01em; }
+  h2 .num { color: var(--accent); font-variant-numeric: tabular-nums; margin-right: .4em; }
+  h3 { font-size: 1.05rem; margin: 0 0 8px; color: var(--text); }
+  p { font-size: 1rem; line-height: 1.6; color: var(--muted); margin: 0 0 12px; max-width: 66ch; }
+  p strong, li strong { color: var(--text); }
+  .lead { font-size: 1.2rem; color: var(--text); max-width: 70ch; }
+
+  ul.clean { list-style: none; padding: 0; margin: 0; }
+  ul.clean > li {
+    position: relative; padding: 7px 0 7px 28px; font-size: 1rem;
+    line-height: 1.5; color: var(--muted); max-width: 72ch;
+  }
+  ul.clean > li::before {
+    content: ""; position: absolute; left: 4px; top: 15px;
+    width: 9px; height: 9px; border-radius: 3px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  }
+  ul.check > li::before { content: "✓"; background: none; color: var(--accent-2); font-weight: 700; left: 0; top: 6px; width: auto; height: auto; }
+
+  .grid { display: grid; gap: 16px; }
+  .grid.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grid.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .grid.cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+  .card {
+    background: linear-gradient(180deg, var(--panel), var(--panel-2));
+    border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 17px 19px; box-shadow: var(--shadow);
+  }
+  .card h3 { display: flex; align-items: center; gap: 10px; }
+  .card .ico { font-size: 1.3rem; }
+  .card p { font-size: .94rem; margin: 0; }
+
+  .stat { display: flex; flex-direction: column; gap: 4px; }
+  .stat .big { font-size: 1.75rem; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; line-height: 1; }
+  .stat .cap { font-size: .78rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+
+  code {
+    font-family: "Cascadia Code", "Fira Code", Consolas, "Courier New", monospace;
+    font-size: .9em; background: rgba(99,102,241,.16);
+    border: 1px solid rgba(99,102,241,.32); color: #c7d0ff;
+    padding: 1px 6px; border-radius: 6px;
+  }
+
+  pre {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-left: 3px solid var(--accent); border-radius: 10px;
+    padding: 14px 16px; overflow-x: auto; margin: 0;
+    box-shadow: inset 0 0 40px rgba(0,0,0,.35);
+  }
+  pre code {
+    background: none; border: none; padding: 0; color: #dbe1ff;
+    font-size: .8rem; line-height: 1.55; white-space: pre; display: block;
+  }
+  pre.scroll { max-height: 340px; overflow-y: auto; }
+
+  .code-wrap { position: relative; margin: 0 0 12px; }
+  .code-wrap .badge {
+    position: absolute; top: 8px; left: 10px; font-size: .64rem;
+    letter-spacing: .1em; text-transform: uppercase; color: var(--accent-2);
+    background: rgba(10,15,34,.85); padding: 3px 8px; border-radius: 6px; pointer-events: none;
+  }
+  .code-wrap pre { padding-top: 30px; }
+
+  .pipeline { display: flex; align-items: stretch; gap: 9px; flex-wrap: wrap; }
+  .pipe-step {
+    flex: 1 1 130px; background: linear-gradient(180deg, var(--panel), var(--panel-2));
+    border: 1px solid var(--border); border-radius: 12px; padding: 13px 11px; text-align: center;
+  }
+  .pipe-step .step-ico { font-size: 1.4rem; display: block; margin-bottom: 6px; }
+  .pipe-step .step-title { font-weight: 600; color: var(--text); font-size: .9rem; display: block; margin-bottom: 3px; }
+  .pipe-step .step-sub { font-size: .74rem; color: var(--muted); }
+  .pipe-arrow { align-self: center; color: var(--accent); font-size: 1.4rem; flex: 0 0 auto; }
+
+  table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  th { color: var(--text); font-size: .76rem; text-transform: uppercase; letter-spacing: .09em; }
+  td { color: var(--muted); }
+  tr:last-child td { border-bottom: none; }
+  .yes { color: var(--accent-2); font-weight: 600; }
+  .no  { color: var(--accent-4); font-weight: 600; }
+  .mid { color: var(--accent-3); font-weight: 600; }
+
+  .debate {
+    display: flex; gap: 12px; align-items: flex-start; padding: 11px 14px;
+    border: 1px solid var(--border); border-radius: 12px; background: var(--panel); margin-bottom: 9px;
+  }
+  .debate .q {
+    flex: 0 0 30px; height: 30px; border-radius: 50%; display: grid; place-items: center;
+    background: var(--accent); color: #fff; font-weight: 700; font-size: .9rem;
+  }
+  .debate p { margin: 0; font-size: .95rem; }
+
+  .timeline { display: flex; flex-direction: column; gap: 8px; }
+  .tl-item {
+    display: flex; gap: 14px; align-items: center;
+    border: 1px solid var(--border); border-radius: 11px;
+    background: var(--panel); padding: 10px 14px;
+  }
+  .tl-item .tl-time {
+    flex: 0 0 auto; font-variant-numeric: tabular-nums; color: var(--accent-2);
+    font-weight: 700; font-size: .82rem; min-width: 58px;
+  }
+  .tl-item .tl-txt { font-size: .92rem; color: var(--muted); }
+
+  .terminal {
+    background: #05070f; border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px; font-family: "Cascadia Code", Consolas, monospace;
+    font-size: .78rem; line-height: 1.6; color: #9fe8c4; overflow-x: auto;
+  }
+  .terminal .bad { color: #ff8080; }
+  .terminal .warn { color: #ffd27a; }
+  .terminal .dim { color: #5c6a97; }
+
+  #bottombar {
+    position: fixed; bottom: 0; left: 0; right: 0; height: 52px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 22px; z-index: 40;
+    background: linear-gradient(180deg, rgba(11,16,32,0), rgba(11,16,32,.92));
+  }
+  #counter { font-size: .82rem; color: var(--muted); font-variant-numeric: tabular-nums; letter-spacing: .06em; }
+  .nav-buttons { display: flex; gap: 8px; }
+  .nav-buttons button {
+    background: var(--panel); border: 1px solid var(--border); color: var(--text);
+    border-radius: 9px; padding: 7px 13px; font-size: .88rem; cursor: pointer;
+    transition: background .15s, border-color .15s, transform .1s;
+  }
+  .nav-buttons button:hover { background: var(--panel-2); border-color: var(--accent); }
+  .nav-buttons button:active { transform: scale(.96); }
+  .hint { font-size: .74rem; color: var(--muted); opacity: .8; }
+
+  .title-slide { align-items: flex-start; }
+  .title-slide .big-badge { font-size: .78rem; letter-spacing: .2em; text-transform: uppercase; color: var(--accent-2); margin-bottom: 18px; }
+  .title-slide h1 {
+    background: linear-gradient(120deg, #fff 20%, #a5b4fc 60%, #6ee7b7 100%);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .meta-row { display: flex; gap: 26px; flex-wrap: wrap; margin-top: 22px; }
+  .meta-row .meta .k { font-size: .7rem; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
+  .meta-row .meta .v { font-size: 1rem; color: var(--text); }
+
+  .note {
+    display: flex; align-items: center; gap: 10px; font-size: .86rem; color: var(--muted);
+    border: 1px dashed var(--border); border-radius: 10px; padding: 9px 14px;
+    margin-bottom: 14px; align-self: flex-start;
+  }
+  .note .ico { font-size: 1.05rem; }
+  .note code { font-size: .82em; }
+
+  @media (max-width: 900px) {
+    .grid.cols-3, .grid.cols-4 { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    .slide { padding: 60px 6vw 72px; }
+  }
+  @media (max-width: 620px) {
+    .grid.cols-2, .grid.cols-3, .grid.cols-4 { grid-template-columns: 1fr; }
+    #topbar { font-size: .62rem; }
+  }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+
+<div id="topbar">
+  <div class="brand"><span class="dot"></span><span>Introdução a Arquitetura de Computadores</span></div>
+  <div>Bloco 3 · Aula 18+19</div>
+</div>
+
+<main id="deck">
+  <!-- 01 — Título -->
+  <section class="slide title-slide active">
+    <div class="kicker">Aula 18 + 19</div>
+    <h1>Concorrência e Energia na GPU</h1>
+    <p class="lead">Duas habilidades para <strong>operar</strong> uma GPU de verdade:
+      <strong>dividi-la com justiça</strong> entre vários jobs e <strong>gastar menos energia</strong>
+      sem perder desempenho.</p>
+    <div class="meta-row">
+      <div class="meta"><div class="k">Bloco</div><div class="v">3 — Automação</div></div>
+      <div class="meta"><div class="k">Ambiente</div><div class="v">Colab + Laboratório Windows</div></div>
+    </div>
+    <div class="grid cols-2" style="margin-top:26px">
+      <div class="card" style="border-top:3px solid var(--accent-4)">
+        <h3><span class="ico">🎯</span> A situação</h3>
+        <p>Uma empresa tem <strong>1 GPU</strong> e <strong>4 engenheiros</strong> enviando treinos
+          ao mesmo tempo. Resultado: travamentos, erros de memória e uma <strong>conta de luz 40%
+          maior</strong> que o previsto.</p>
+      </div>
+      <div class="card" style="border-top:3px solid var(--accent-2)">
+        <h3><span class="ico">🧰</span> O que vamos resolver</h3>
+        <p>Organizar a <strong>ordem</strong> dos jobs (um de cada vez, com prioridade) e
+          <strong>reduzir o desperdício</strong> de energia da placa.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 02 — Agenda -->
+  <section class="slide">
+    <div class="kicker">Visão Geral</div>
+    <h2>O caminho da aula</h2>
+    <p>Vamos resolver <strong>um problema de cada vez</strong>: primeiro a bagunça (vários jobs
+      juntos), depois o desperdício (energia).</p>
+    <div class="pipeline" style="margin-top:12px">
+      <div class="pipe-step"><span class="step-ico">💥</span><span class="step-title">1. A bagunça</span><span class="step-sub">4 jobs, 1 GPU</span></div>
+      <span class="pipe-arrow">→</span>
+      <div class="pipe-step"><span class="step-ico">🔒</span><span class="step-title">2. Um de cada vez</span><span class="step-sub">o "lock"</span></div>
+      <span class="pipe-arrow">→</span>
+      <div class="pipe-step"><span class="step-ico">📋</span><span class="step-title">3. A fila</span><span class="step-sub">quem entra e quando</span></div>
+      <span class="pipe-arrow">→</span>
+      <div class="pipe-step"><span class="step-ico">🌡️</span><span class="step-title">4. Energia</span><span class="step-sub">calor e potência</span></div>
+      <span class="pipe-arrow">→</span>
+      <div class="pipe-step"><span class="step-ico">💰</span><span class="step-title">5. Economia</span><span class="step-sub">menos W, mesmo trabalho</span></div>
+    </div>
+    <div class="grid cols-2" style="margin-top:22px; align-items:start">
+      <div class="card" style="border-top:3px solid var(--accent-3)">
+        <h3><span class="ico">🖥️</span> Onde você vai rodar</h3>
+        <p>No <strong>Colab</strong> ou no <strong>Windows</strong>. Sem GPU NVIDIA, o
+          notebook usa um <strong>modo simulado</strong> — os conceitos não mudam.</p>
+      </div>
+      <div class="card" style="border-top:3px solid var(--accent-2)">
+        <h3><span class="ico">🔑</span> Ideias-chave</h3>
+        <p>Um de cada vez · Fila com prioridade · Calor = desempenho perdido · Limitar a potência</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 03 — O caos -->
+  <section class="slide">
+    <div class="kicker">Parte 1 · A bagunça</div>
+    <h2><span class="num">1.</span>Quatro jobs, uma GPU: o que dá errado</h2>
+    <div class="grid cols-2">
+      <div>
+        <p>Quando dois treinos usam a GPU <strong>ao mesmo tempo</strong>, cada um pega a memória
+          que precisa <strong>sem pedir licença</strong>. A placa tem um limite — e ele estoura.</p>
+        <p>O resultado mais comum não é um erro bonito: é um <strong>travamento silencioso</strong>.
+          O treino morre de madrugada e ninguém percebe.</p>
+        <p>É como <strong>quatro pessoas dividindo uma cozinha</strong>: cada uma pega o que
+          precisa, e a comida acaba no meio do preparo.</p>
+      </div>
+      <div>
+        <div class="card" style="border-top:3px solid var(--accent-4); margin-bottom:12px">
+          <h3><span class="ico">📉</span> O caso real</h3>
+          <p>Numa GPU de <strong>8 GB</strong>, o Job-A pede <strong>5 GB</strong> e o Job-B pede
+            <strong>5 GB</strong> no mesmo instante. Total: <strong>10 GB</strong> — mais que a
+            placa tem.</p>
+        </div>
+        <ul class="clean">
+          <li>Um dos jobs recebe o erro <strong>"out of memory"</strong>.</li>
+          <li>O outro <strong>trava sem avisar</strong>.</li>
+          <li>Os dois resultados são perdidos.</li>
+        </ul>
+        <div class="note" style="margin-top:12px">
+          <span class="ico">💡</span>
+          <span>A GPU é um recurso <strong>exclusivo</strong>, como uma impressora: melhor um job
+            por vez.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 04 — Lock -->
+  <section class="slide">
+    <div class="kicker">Parte 1 · Um de cada vez</div>
+    <h2><span class="num">2.</span>O "lock": a chave da GPU</h2>
+    <div class="grid cols-2">
+      <div>
+        <p>Imagine uma sala com <strong>uma única chave</strong>. Quem pega a chave usa a sala; os
+          outros esperam na porta. Na GPU é igual: o <strong>lock</strong> é essa chave.</p>
+        <p>Antes de rodar, cada job <strong>tenta pegar a chave</strong>. Se conseguiu, roda sozinho;
+          se a chave já foi levada, ele <strong>espera a vez</strong>.</p>
+      </div>
+      <div>
+        <h3 style="margin-bottom:8px">Por que isso funciona</h3>
+        <ul class="clean">
+          <li>Garante <strong>um job por vez</strong> na GPU.</li>
+          <li>Evita o erro de memória (ninguém pega VRAM ao mesmo tempo).</li>
+          <li>Ao terminar, o job <strong>devolve a chave</strong> para o próximo.</li>
+        </ul>
+        <div class="card" style="margin-top:12px">
+          <h3><span class="ico">🔑</span> Na prática</h3>
+          <p>No laboratório, a "chave" é uma <strong>pasta</strong> que o primeiro job cria. Os
+            demais veem que a pasta já existe e entendem: <em>"a GPU está ocupada"</em>.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 05 — Fila -->
+  <section class="slide">
+    <div class="kicker">Parte 1 · Justiça</div>
+    <h2><span class="num">3.</span>A fila: quem entra, quando entra</h2>
+    <div class="grid cols-2">
+      <div>
+        <p>Só a chave não basta: quem chegou por último pode pegar primeiro, e um job urgente pode
+          esperar demais. A solução é uma <strong>fila com senha</strong>, como a do banco.</p>
+        <p>Cada job recebe uma senha com <strong>prioridade + horário</strong>. Quem tem o
+          <strong>menor número de prioridade</strong> passa primeiro; entre iguais, quem
+          <strong>chegou antes</strong>.</p>
+      </div>
+      <div>
+        <h3 style="margin-bottom:8px">Exemplo da fila do dia</h3>
+        <table>
+          <thead><tr><th>Job</th><th>Prioridade</th><th>Ordem</th></tr></thead>
+          <tbody>
+            <tr><td>Treino urgente (cliente)</td><td>1 (alta)</td><td class="yes">1º e 2º</td></tr>
+            <tr><td>Ajuste de modelo</td><td>2 (média)</td><td class="mid">3º</td></tr>
+            <tr><td>Teste exploratório</td><td>3 (baixa)</td><td class="no">4º</td></tr>
+          </tbody>
+        </table>
+        <div class="note" style="margin-top:12px">
+          <span class="ico">⏳</span>
+          <span>Cuidado com o job de baixa prioridade que <strong>nunca chega a rodar</strong>. A
+            solução é dar <strong>mais prioridade a quem espera muito</strong>.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 06 — Prática 1 -->
+  <section class="slide">
+    <div class="kicker">Prática 1 · 4 jobs, 1 GPU</div>
+    <h2><span class="num">4.</span>Vendo a fila funcionar</h2>
+    <div class="grid cols-2">
+      <div>
+        <p>Lançamos <strong>4 jobs de uma vez</strong> (dois urgentes, um médio, um de baixa
+          prioridade) e observamos a <strong>ordem</strong> em que rodam.</p>
+        <ul class="clean" style="margin-top:10px">
+          <li>Os dois urgentes rodam <strong>primeiro</strong>.</li>
+          <li>Depois o médio; por último o de baixa prioridade.</li>
+          <li><strong>Nenhum</strong> dá erro de memória.</li>
+        </ul>
+      </div>
+      <div>
+        <h3 style="margin-bottom:8px">Ordem esperada</h3>
+        <div class="timeline">
+          <div class="tl-item"><span class="tl-time">1º</span><span class="tl-txt">Job urgente A</span></div>
+          <div class="tl-item"><span class="tl-time">2º</span><span class="tl-txt">Job urgente D</span></div>
+          <div class="tl-item"><span class="tl-time">3º</span><span class="tl-txt">Job médio C</span></div>
+          <div class="tl-item"><span class="tl-time">4º</span><span class="tl-txt">Job de baixa prioridade B</span></div>
+        </div>
+        <div class="note" style="margin-top:12px">
+          <span class="ico">✅</span>
+          <span>Todos concluem, <strong>um de cada vez</strong>, na ordem certa.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 07 — Energia -->
+  <section class="slide">
+    <div class="kicker">Parte 2 · Energia</div>
+    <h2><span class="num">5.</span>Calor e o desperdício invisível</h2>
+    <div class="grid cols-2">
+      <div>
+        <p>Toda GPU tem um <strong>teto de potência</strong> — os watts que ela pode consumir.
+          Exemplos reais: uma <strong>RTX 4090 = 450 W</strong>; uma <strong>Tesla T4 = 70 W</strong>.</p>
+        <p>Quando a placa <strong>esquenta demais</strong> (acima de ~83 °C), ela mesma
+          <strong>reduz a velocidade</strong> para se proteger. Você <strong>perde desempenho</strong>
+          e ainda <strong>gasta energia</strong> — o pior dos dois mundos.</p>
+      </div>
+      <div>
+        <div class="card" style="border-top:3px solid var(--accent-4); margin-bottom:12px">
+          <h3><span class="ico">💰</span> O caso real da empresa</h3>
+          <p>A GPU ficava na <strong>potência máxima mesmo sem trabalho pesado</strong> — como um
+            carro acelerado com o freio de mão puxado. Foi a causa da conta <strong>40% maior</strong>.</p>
+        </div>
+        <div class="note">
+          <span class="ico">🌡️</span>
+          <span>Em GPUs reais, a potência é lida do <strong>sensor</strong> da placa — é
+            <strong>medida</strong>, não estimada.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 08 — Power Limit -->
+  <section class="slide">
+    <div class="kicker">Parte 2 · O controle</div>
+    <h2><span class="num">6.</span>Limitar a potência: o ajuste que economiza</h2>
+    <div class="grid cols-2">
+      <div>
+        <p>Existe um <strong>teto de potência que você escolhe</strong>, menor que o máximo da
+          placa. Na prática, cortar <strong>20–30%</strong> da potência costuma custar apenas
+          <strong>5–10%</strong> de velocidade — uma <strong>troca muito boa</strong>.</p>
+        <p>É como <strong>andar a 100 km/h em vez de 120</strong>: chega quase junto, gastando bem
+          menos combustível.</p>
+      </div>
+      <div>
+        <h3 style="margin-bottom:8px">Exemplo real (Tesla T4)</h3>
+        <table>
+          <thead><tr><th>Configuração</th><th>Velocidade</th><th>Consumo</th></tr></thead>
+          <tbody>
+            <tr><td>Sem limite (70 W)</td><td>100%</td><td class="no">70 W</td></tr>
+            <tr><td><strong>Limitada a 55 W</strong></td><td class="yes"><strong>~92%</strong></td><td class="yes"><strong>55 W</strong></td></tr>
+          </tbody>
+        </table>
+        <div class="note" style="margin-top:12px">
+          <span class="ico">📊</span>
+          <span>Você mantém quase toda a velocidade gastando <strong>~21% menos energia</strong>.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 09 — Prática 2 -->
+  <section class="slide">
+    <div class="kicker">Prática 2 · Economia</div>
+    <h2><span class="num">7.</span>Achar o melhor ponto de consumo</h2>
+    <div class="grid cols-2">
+      <div>
+        <p>Testamos vários níveis de potência, medimos a <strong>velocidade</strong> e o
+          <strong>consumo</strong>, e calculamos a <strong>eficiência</strong>: quanto de trabalho
+          cada joule entrega.</p>
+        <p>O melhor ponto <strong>quase nunca é a potência máxima</strong>. É uma decisão com
+          dados: <strong>mais trabalho por menos energia</strong>.</p>
+      </div>
+      <div>
+        <h3 style="margin-bottom:8px">Resultado de um teste</h3>
+        <table>
+          <thead><tr><th>Potência</th><th>Velocidade</th><th>Eficiência</th></tr></thead>
+          <tbody>
+            <tr><td>100 W</td><td>171 imgs/s</td><td class="no">1,86</td></tr>
+            <tr><td><strong>150 W</strong></td><td>380 imgs/s</td><td class="yes"><strong>2,75 ← melhor</strong></td></tr>
+            <tr><td>200 W</td><td>463 imgs/s</td><td class="mid">2,52</td></tr>
+          </tbody>
+        </table>
+        <div class="note" style="margin-top:12px">
+          <span class="ico">💡</span>
+          <span>A 200 W a placa é mais rápida, mas <strong>gasta mais por imagem</strong> — não
+            compensa.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 10 — Integração -->
+  <section class="slide">
+    <div class="kicker">Juntando as partes</div>
+    <h2><span class="num">8.</span>Por que as duas coisas andam juntas</h2>
+    <div class="grid cols-3">
+      <div class="card">
+        <h3><span class="ico">🔒</span> Ordem</h3>
+        <p>A chave (lock) + a fila garantem um job por vez, na sequência certa — sem erro de memória.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ico">🌱</span> Economia</h3>
+        <p>Limitar a potência reduz a conta de luz quase sem perder velocidade.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ico">🧩</span> Medir certo</h3>
+        <p>Com dois jobs ao mesmo tempo, a medição de energia fica errada — por isso a chave
+          vem primeiro.</p>
+      </div>
+    </div>
+    <div class="note" style="margin-top:18px">
+      <span class="ico">📄</span>
+      <span>Tudo isto está no notebook da aula e nos laboratórios de concorrência e energia.</span>
+    </div>
+  </section>
+
+  <!-- 11 — Síntese -->
+  <section class="slide">
+    <div class="kicker">Síntese</div>
+    <h2>O que fica desta aula</h2>
+    <div class="grid cols-3">
+      <div class="card">
+        <h3><span class="ico">🔒</span> Um de cada vez</h3>
+        <p>A GPU é recurso exclusivo: uma "chave" evita travamentos e erros de memória.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ico">📋</span> Na ordem certa</h3>
+        <p>A fila com prioridade garante que o job urgente passe primeiro — sem esquecer os demais.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ico">💰</span> Sem desperdício</h3>
+        <p>Limitar a potência corta a conta de luz mantendo quase todo o desempenho.</p>
+      </div>
+    </div>
+    <div class="note" style="margin-top:18px">
+      <span class="ico">📝</span>
+      <span><strong>Tarefa:</strong> registre a ordem de execução dos 4 jobs e o nível de potência
+        de melhor eficiência; justifique sua escolha para um projeto com prazo apertado.</span>
+    </div>
+    <div class="note" style="margin-top:10px">
+      <span class="ico">🔗</span>
+      <span>Revise: <a href="../aula15/README.md">Aula 15</a> (fila e lock no Linux) e
+        <a href="../aula14/README.md">Aula 14</a> (automação e telemetria).</span>
+    </div>
+  </section>
+
+</main>
+
+<div id="bottombar">
+  <div id="counter">01 / 11</div>
+  <div class="hint">← → · espaço · Home/End</div>
+  <div class="nav-buttons">
+    <button id="prev" aria-label="Slide anterior">← Anterior</button>
+    <button id="next" aria-label="Próximo slide">Próximo →</button>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var slides = Array.prototype.slice.call(document.querySelectorAll(".slide"));
+    var progress = document.getElementById("progress");
+    var counter = document.getElementById("counter");
+    var current = 0;
+
+    function pad(n) { return n < 10 ? "0" + n : "" + n; }
+
+    function render() {
+      slides.forEach(function (s, i) { s.classList.toggle("active", i === current); });
+      var pct = slides.length > 1 ? (current / (slides.length - 1)) * 100 : 100;
+      progress.style.width = pct + "%";
+      counter.textContent = pad(current + 1) + " / " + pad(slides.length);
+      if (window.location.hash !== "#" + (current + 1)) {
+        history.replaceState(null, "", "#" + (current + 1));
+      }
+    }
+
+    function go(delta) {
+      var next = current + delta;
+      if (next < 0 || next >= slides.length) return;
+      current = next;
+      render();
+    }
+
+    function goTo(index) {
+      if (index < 0 || index >= slides.length) return;
+      current = index;
+      render();
+    }
+
+    document.getElementById("next").addEventListener("click", function () { go(1); });
+    document.getElementById("prev").addEventListener("click", function () { go(-1); });
+
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "ArrowRight" || e.key === " " || e.key === "PageDown") {
+        e.preventDefault(); go(1);
+      } else if (e.key === "ArrowLeft" || e.key === "PageUp") {
+        e.preventDefault(); go(-1);
+      } else if (e.key === "Home") {
+        e.preventDefault(); goTo(0);
+      } else if (e.key === "End") {
+        e.preventDefault(); goTo(slides.length - 1);
+      }
+    });
+
+    window.addEventListener("hashchange", function () {
+      var n = parseInt(window.location.hash.replace("#", ""), 10);
+      if (!isNaN(n)) goTo(n - 1);
+    });
+
+    var start = parseInt(window.location.hash.replace("#", ""), 10);
+    if (!isNaN(start)) current = Math.min(Math.max(start - 1, 0), slides.length - 1);
+    render();
+  })();
+</script>
+</body>
+</html>

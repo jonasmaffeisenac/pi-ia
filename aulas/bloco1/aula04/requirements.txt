@@ -1,0 +1,6 @@
+# Dependencias da Aula 04 - Fundamentos de Processos e Threads.
+# Instaladas automaticamente pelo iniciar.bat (dentro de .venv).
+# Nenhuma e obrigatoria: threading/multiprocessing sao da biblioteca padrao.
+# psutil e opcional (mostra CPU/processos no monitor). numba+cupy sao opcionais
+# (so para o exercicio de kernels CUDA, em GPU NVIDIA).
+psutil>=5.9.0

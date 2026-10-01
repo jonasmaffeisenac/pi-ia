@@ -1,1 +1,97 @@
-.env
+# === Python ===
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+
+# === Ambientes Virtuais ===
+venv/
+.venv/
+env/
+.env/
+
+# === Jupyter Notebooks ===
+.ipynb_checkpoints/
+
+# === IDEs ===
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# === Sistema Operacional ===
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# === CUDA / GPU ===
+*.cubin
+*.fatbin
+*.ptx
+
+# === Dados e Modelos (grandes demais para o Git) ===
+*.h5
+*.hdf5
+*.ckpt
+*.pth
+*.onnx
+datasets/
+models/
+checkpoints/
+
+# === Notas locais / rascunhos ===
+AGENTS.md
+.context.md
+TESTE.TXT
+
+# === POCs fora do currículo ===
+aulas/labs/
+
+# === Saídas geradas pela Aula 14 (monitoramento de GPU) ===
+gpu_log*.csv
+alertas.log
+gpu_alertas.log
+gpu_dashboard.png
+gpu_log_dashboard.png
+dashboard.html
+aulas/bloco3/aula14/laboratorio_windows/reports/
+
+# === Laboratório de fila de GPU — Aula 15 ===
+aulas/bloco3/aula15/laboratorio_windows/reports/*
+!aulas/bloco3/aula15/laboratorio_windows/reports/.gitkeep
+aulas/bloco3/aula15/laboratorio_windows/**/__pycache__/
+
+# === Laboratório Windows — Aula 06 ===
+aulas/bloco1/aula06/laboratorio_windows/reports/*
+!aulas/bloco1/aula06/laboratorio_windows/reports/.gitkeep
+
+# === Laboratórios realtime (Docker e Windows) — Aula 14 ===
+aulas/bloco3/aula14/laboratorio_realtime-docker/reports/*
+!aulas/bloco3/aula14/laboratorio_realtime-docker/reports/.gitkeep
+aulas/bloco3/aula14/laboratorio_realtime-docker/**/__pycache__/
+aulas/bloco3/aula14/laboratorio_realtime-windows/reports/*
+!aulas/bloco3/aula14/laboratorio_realtime-windows/reports/.gitkeep
+aulas/bloco3/aula14/laboratorio_realtime-windows/**/__pycache__/
+
+# === Laboratórios da Aula 18+19 ===
+aulas/bloco3/aula18_19_dupla/laboratorio_concorrencia/reports/*
+!aulas/bloco3/aula18_19_dupla/laboratorio_concorrencia/reports/.gitkeep
+aulas/bloco3/aula18_19_dupla/laboratorio_concorrencia/**/__pycache__/
+aulas/bloco3/aula18_19_dupla/laboratorio_energia/reports/*
+!aulas/bloco3/aula18_19_dupla/laboratorio_energia/reports/.gitkeep
+aulas/bloco3/aula18_19_dupla/laboratorio_energia/**/__pycache__/
+
+# === Saídas geradas pelo notebook da Aula 18+19 ===
+aulas/bloco3/aula18_19_dupla/notebook_colab/*.csv
+aulas/bloco3/aula18_19_dupla/notebook_colab/*.png
+aulas/bloco3/aula18_19_dupla/notebook_colab/*.log
+aulas/bloco3/aula18_19_dupla/notebook_colab/*.lockdir/
+aulas/bloco3/aula18_19_dupla/notebook_colab/*spool*/
+aulas/bloco3/aula18_19_dupla/notebook_colab/train_job.py
+aulas/bloco3/aula18_19_dupla/notebook_colab/fila_gpu.py
+
+

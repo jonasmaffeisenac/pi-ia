@@ -1,0 +1,5 @@
+# Dependencias da Aula 07 - Introducao ao Modelo CUDA.
+# Instaladas automaticamente pelo iniciar.bat (dentro de .venv).
+# numpy e obrigatorio; numba e cupy sao opcionais (so usados com GPU NVIDIA).
+# No Colab com T4 GPU, ambos ja vem disponiveis (ou instale cupy-cuda12x).
+numpy>=1.24.0
